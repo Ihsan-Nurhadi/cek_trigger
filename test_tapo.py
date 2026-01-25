@@ -107,20 +107,26 @@ class PeopleDetectionLogger:
             self.last_detection_time = current_time
             
         else:
-            # Orang tidak terdeteksi
-            if self.is_detecting:
-                # Cek apakah ada gap lebih dari 1 detik (berarti orang sudah pergi)
-                if self.last_detection_time and (current_time - self.last_detection_time).total_seconds() > 1.0:
-                    # Hitung durasi total
+            # Orang TIDAK terdeteksi
+            if self.is_detecting and self.last_detection_time:
+                # Hitung berapa lama sejak terakhir terdeteksi
+                gap = (current_time - self.last_detection_time).total_seconds()
+                
+                # Jika gap > 0.5 detik, berarti orang sudah pergi
+                if gap > 0.5:
+                    # Hitung durasi total deteksi
                     duration = (self.last_detection_time - self.detection_start).total_seconds()
+                    
+                    print(f"⏱️  Deteksi selesai: {self.last_detection_time.strftime('%H:%M:%S')}")
+                    print(f"⌛ Durasi: {duration:.2f} detik")
                     
                     # Jika durasi >= threshold, catat ke Excel
                     if duration >= self.threshold:
                         self.log_to_excel(event_data, duration)
                     else:
-                        print(f"⚠️  Deteksi terlalu singkat ({duration:.1f}s), tidak dicatat")
+                        print(f"⚠️  Deteksi terlalu singkat ({duration:.1f}s < {self.threshold}s), tidak dicatat")
                     
-                    # Reset state
+                    # Reset state untuk deteksi berikutnya
                     self.is_detecting = False
                     self.detection_start = None
                     self.last_detection_time = None
@@ -475,9 +481,13 @@ def get_tapo_proof_data():
                         print("─"*60)
                 
                 # Juga proses event kosong untuk update debouncing state
-                else:
-                    dummy_event = {'is_people_detected': False}
-                    logger.process_event(dummy_event)
+                # Cek apakah sudah lama tidak ada event (untuk close deteksi)
+                if logger.is_detecting and logger.last_detection_time:
+                    gap = (datetime.now() - logger.last_detection_time).total_seconds()
+                    if gap > 0.5:
+                        # Tutup deteksi yang sedang berjalan
+                        dummy_event = {'is_people_detected': False, 'source': {}}
+                        logger.process_event(dummy_event)
                 
                 time.sleep(0.1)
                 

@@ -21,7 +21,7 @@ logging.basicConfig(
 logging.getLogger('zeep').setLevel(logging.WARNING)
 
 # --- KONFIGURASI ---
-IP = "192.168.68.105"
+IP = "192.168.0.107"
 PORT = 2020
 USER = "nayakapratama"
 PASS = "nayakapratama"
