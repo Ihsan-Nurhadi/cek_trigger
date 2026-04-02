@@ -129,6 +129,7 @@ def index(request):
         
         context['ip'] = ip
         context['username'] = username
+        context['password'] = password
         context['track_id'] = track_id
         context['start_time'] = start_input
         context['end_time'] = end_input
@@ -144,11 +145,14 @@ def download_video(request):
         playback_uri = request.POST.get('playback_uri')
         start_time = request.POST.get('start_time', '').replace(' ', '_').replace(':', '-')
         
+        print(f"DEBUG DOWNLOAD: IP={ip}, USER={username}, PASS={password}, URI={playback_uri}")
+        
         url = f"http://{ip}/ISAPI/ContentMgmt/download"
         
+        import html
         xml_payload = f"""<?xml version="1.0" encoding="utf-8"?>
 <downloadRequest>
-<playbackURI>{playback_uri}</playbackURI>
+<playbackURI>{html.escape(playback_uri)}</playbackURI>
 </downloadRequest>"""
         
         try:
