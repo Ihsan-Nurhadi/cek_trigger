@@ -78,9 +78,11 @@ def run_simple_test():
         token = UsernameToken(USER, PASS, use_digest=True)
         pullpoint = Client(wsdl=events_wsdl_file, transport=cam.transport, wsse=token).create_service(binding_name, final_url)
 
-        print("\n✅ LISTENER AKTIF - Menampilkan Topic, Data, dan Timestamp...\n")
+        print("\n✅ LISTENER AKTIF - Filter Spam Aktif. Menunggu perubahan event...\n")
         print("-" * 80)
         
+        last_state = {}
+
         while True:
             try:
                 response = pullpoint.PullMessages(Timeout='PT5S', MessageLimit=10)
@@ -93,11 +95,21 @@ def run_simple_test():
                         event = parse_tapo_event(msg)
                         if 'error' in event:
                             print(f"Error parsing event: {event['error']}")
-                        else:
-                            print(f"[{event['timestamp']}]")
-                            print(f"Topic: {event['topic']}")
-                            print(f"Data : {event['data']}")
-                            print("-" * 80)
+                            continue
+                        
+                        topic = event['topic']
+                        data_str = str(event['data'])
+                        
+                        # Hanya memproses jika Topic dan Data berbeda dengan yang terakhir kali dicatat
+                        if topic not in last_state or last_state[topic] != data_str:
+                            last_state[topic] = data_str # Simpan state yang baru
+                            
+                            # Filter opsional: abaikan log rutin seperti ProcessorUsage jika tidak penting
+                            if "ProcessorUsage" not in topic:
+                                print(f"[{event['timestamp']}]")
+                                print(f"Topic: {topic}")
+                                print(f"Data : {event['data']}")
+                                print("-" * 80)
                 
                 time.sleep(0.1)
                 
