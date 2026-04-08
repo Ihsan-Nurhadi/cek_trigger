@@ -4,9 +4,9 @@ import time
 import re
 import logging
 from datetime import datetime
-from onvif import ONVIFCamera
-from zeep import Client
-from zeep.wsse.username import UsernameToken
+import requests
+from requests.auth import HTTPDigestAuth
+import xml.etree.ElementTree as ET
 
 # Konfigurasi logging dasar
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,100 +17,91 @@ PORT = 80
 USER = "Nayakaws"
 PASS = "nayakaprtm2"
 
-def extract_simple_items_from_xml(element):
-    result = {}
-    namespaces = {'tt': 'http://www.onvif.org/ver10/schema'}
-    simple_items = element.findall('.//tt:SimpleItem', namespaces)
-    for item in simple_items:
-        name = item.get('Name')
-        value = item.get('Value')
-        if name: result[name] = value
-    return result
-
-def parse_tapo_event(message):
+def parse_isapi_event(xml_data):
     try:
-        event_data = {
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'topic': None,
-            'data': {}
+        
+        xml_data_clean = re.sub(r'\sxmlns="[^"]+"', '', xml_data, count=1)
+        root = ET.fromstring(xml_data_clean)
+        
+        event_time = root.find('dateTime')
+        event_type = root.find('eventType')
+        event_state = root.find('eventState')
+        event_desc = root.find('eventDescription')
+        channel_id = root.find('channelID')
+        
+        
+        data = {
+            'timestamp': event_time.text if event_time is not None else datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'type': event_type.text if event_type is not None else 'Unknown',
+            'state': event_state.text if event_state is not None else 'Unknown',
+            'description': event_desc.text if event_desc is not None else 'None',
+            'channel': channel_id.text if channel_id is not None else 'Unknown'
         }
-        
-        if hasattr(message, 'Topic'):
-            topic_obj = message.Topic
-            event_data['topic'] = str(topic_obj._value_1) if hasattr(topic_obj, '_value_1') else str(topic_obj)
-        
-        if hasattr(message, 'Message'):
-            msg_obj = message.Message
-            if hasattr(msg_obj, '_value_1') and msg_obj._value_1 is not None:
-                xml_element = msg_obj._value_1
-                ns = {'tt': 'http://www.onvif.org/ver10/schema'}
-                data_elem = xml_element.find('tt:Data', ns)
-                if data_elem is not None:
-                    event_data['data'] = extract_simple_items_from_xml(data_elem)
-
-        return event_data
+        return data
     except Exception as e:
-        return {'error': str(e)}
+        return {'error': str(e), 'raw': xml_data}
 
-def run_simple_test():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    wsdl_path = os.path.join(current_dir, 'wsdl')
+def run_isapi_test():
+    url = f"http://{IP}:{PORT}/ISAPI/Event/notification/alertStream"
     
-    if not os.path.exists(wsdl_path):
-        print(f"❌ Folder WSDL tidak ditemukan di: {wsdl_path}")
-        return
-
+    print(f"Connecting to {url} via ISAPI...")
+    
     try:
-        print(f"Connecting to {IP}:{PORT}...")
-        cam = ONVIFCamera(IP, PORT, USER, PASS, wsdl_dir=wsdl_path)
-        event_service = cam.create_events_service()
-        subscription_response = event_service.CreatePullPointSubscription()
         
-        try: raw_url = subscription_response.SubscriptionReference.Address._value_1
-        except: raw_url = subscription_response.SubscriptionReference.Address
+        response = requests.get(url, auth=HTTPDigestAuth(USER, PASS), stream=True, timeout=(10, None))
+        
+        
+        if response.status_code == 401:
+            print("Digest Auth gagal, mencoba Basic Auth...")
+            response = requests.get(url, auth=(USER, PASS), stream=True, timeout=(10, None))
+            
+        if response.status_code != 200:
+            print(f"❌ Gagal koneksi: HTTP {response.status_code}")
+            return
 
-        final_url = raw_url
-        if f":{PORT}/" not in raw_url:
-            final_url = re.sub(r':\d+/', f':{PORT}/', raw_url)
-
-        events_wsdl_file = os.path.join(wsdl_path, 'events.wsdl')
-        binding_name = '{http://www.onvif.org/ver10/events/wsdl}PullPointSubscriptionBinding'
-        token = UsernameToken(USER, PASS, use_digest=True)
-        pullpoint = Client(wsdl=events_wsdl_file, transport=cam.transport, wsse=token).create_service(binding_name, final_url)
-
-        print("\n✅ LISTENER AKTIF - Menampilkan Topic, Data, dan Timestamp...\n")
+        print("\n✅ LISTENER AKTIF - Menampilkan Log Event dari ISAPI...\n")
         print("-" * 80)
         
-        while True:
-            try:
-                response = pullpoint.PullMessages(Timeout='PT5S', MessageLimit=10)
+        payload_data = ""
+        in_xml = False
+        
+       
+        for line in response.iter_lines():
+            if not line:
+                continue
                 
-                if hasattr(response, 'NotificationMessage'):
-                    messages = response.NotificationMessage
-                    if not isinstance(messages, list): messages = [messages]
+            decoded_line = line.decode('utf-8', errors='ignore').strip()
+            
+            
+            if "<EventNotificationAlert" in decoded_line:
+                in_xml = True
+                payload_data = decoded_line
+            elif in_xml:
+                payload_data += decoded_line
+                if "</EventNotificationAlert>" in decoded_line:
+                    in_xml = False
                     
-                    for msg in messages:
-                        event = parse_tapo_event(msg)
-                        if 'error' in event:
-                            print(f"Error parsing event: {event['error']}")
-                        else:
-                            print(f"[{event['timestamp']}]")
-                            print(f"Topic: {event['topic']}")
-                            print(f"Data : {event['data']}")
-                            print("-" * 80)
-                
-                time.sleep(0.1)
-                
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "timeout" not in error_msg and "no messages" not in error_msg:
-                    print(f"Iteration Error: {e}")
-                time.sleep(0.5)
-
+                    event = parse_isapi_event(payload_data)
+                    
+                    if 'error' in event:
+                        print(f"Error parse event: {event['error']}")
+                        print(f"Raw Data: {event['raw']}")
+                    elif event.get('type', '').upper() == 'VMD':
+                        print(f"[{event['timestamp']}]")
+                        print(f"Event Type : {event['type']}")
+                        print(f"Event State: {event['state']}")
+                        print(f"Channel    : {event['channel']}")
+                        print(f"Deskripsi  : {event['description']}")
+                        print("-" * 80)
+                        
+                    payload_data = ""
+                    
+    except requests.exceptions.Timeout:
+        print("❌ Koneksi Timeout. Pastikan IP dan Port benar.")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error koneksi stream: {e}")
     except KeyboardInterrupt:
-        print("\n� Berhenti.")
-    except Exception as e:
-        print(f"❌ Error: {e}")
+        print("\n⏹ Berhenti.")
 
 if __name__ == "__main__":
-    run_simple_test()
+    run_isapi_test()

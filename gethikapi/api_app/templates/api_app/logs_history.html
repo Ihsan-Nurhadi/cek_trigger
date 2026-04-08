@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riwayat Rekaman — GeoHikvision</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #f4f6f9;
+            color: #1e293b;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 28px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 4px rgba(0,0,0,.06);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+        .header-logo-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .header-logo-icon svg { width: 18px; height: 18px; color: #fff; }
+        .header-title {
+            font-size: 16px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header-meta {
+            font-size: 12px;
+            color: #64748b;
+            font-family: monospace;
+        }
+        .btn-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #475569;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all .2s;
+        }
+        .btn-back:hover { background: #f1f5f9; border-color: #cbd5e1; }
+
+        /* ── Page Layout ── */
+        .page-wrapper {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 24px 28px;
+        }
+
+        /* ── Filter Bar ── */
+        .filter-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.05);
+        }
+        .filter-bar {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .filter-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            letter-spacing: .5px;
+            text-transform: uppercase;
+        }
+        .filter-input {
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            color: #334155;
+            font-family: 'Outfit', sans-serif;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+            min-width: 190px;
+        }
+        .filter-input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+        }
+        .btn-search {
+            background: #e53e3e;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 22px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .2s, transform .15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Outfit', sans-serif;
+        }
+        .btn-search:hover { background: #c53030; transform: translateY(-1px); }
+
+        /* ── Results Card ── */
+        .results-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.05);
+            overflow: hidden;
+        }
+        .results-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            background: #fafbfc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .results-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #334155;
+        }
+        .badge-count {
+            background: #eff6ff;
+            color: #2563eb;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            border: 1px solid #bfdbfe;
+        }
+
+        /* ── Table ── */
+        .table-wrap { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead {
+            background: #f8fafc;
+            top: 60px;
+            z-index: 10;
+        }
+        th {
+            padding: 11px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: .5px;
+            text-transform: uppercase;
+            border-bottom: 1.5px solid #e2e8f0;
+        }
+        th.col-num { width: 52px; text-align: center; }
+        th.col-dl  { width: 120px; text-align: center; }
+
+        td {
+            padding: 11px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            vertical-align: middle;
+        }
+        td.col-num {
+            text-align: center;
+            color: #94a3b8;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        td.col-dl { text-align: center; }
+        tbody tr:hover { background: #fafbff; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .time-cell { font-weight: 500; color: #1e40af; }
+        .time-end  { color: #475569; }
+
+        /* ── Download Button (B&W) ── */
+        .btn-dl {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1.5px solid #1e293b;
+            border-radius: 7px;
+            padding: 5px 13px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            transition: background .18s, transform .12s;
+            text-decoration: none;
+        }
+        .btn-dl:hover {
+            background: #1e293b;
+            transform: translateY(-1px);
+        }
+        .btn-dl svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+        /* ── Empty / Error States ── */
+        .state-box {
+            padding: 60px 20px;
+            text-align: center;
+            color: #94a3b8;
+        }
+        .state-box svg { width: 40px; height: 40px; margin-bottom: 12px; color: #cbd5e1; }
+        .state-box p { font-size: 14px; }
+
+        .error-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 14px 18px;
+            color: #991b1b;
+            font-size: 13px;
+            margin: 16px 20px;
+            font-family: monospace;
+        }
+
+        /* ── Footer ── */
+        .page-footer {
+            text-align: center;
+            padding: 16px;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <a href="/" class="header-logo">
+            <div class="header-logo-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <span class="header-title">GeoHikvision View</span>
+        </a>
+        {% if ip %}
+        <span class="header-meta">{{ ip }} · Channel {{ track_id }}</span>
+        {% endif %}
+        <a href="/" class="btn-back">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Kembali ke Peta
+        </a>
+    </header>
+
+    <div class="page-wrapper">
+
+        <!-- Filter Bar -->
+        <div class="filter-card">
+            <form method="POST" action="/logs-history/">
+                {% csrf_token %}
+                <input type="hidden" name="ip"       value="{{ ip|default:'' }}">
+                <input type="hidden" name="username"  value="{{ username|default:'' }}">
+                <input type="hidden" name="password"  value="{{ password|default:'' }}">
+                <input type="hidden" name="track_id"  value="{{ track_id|default:'1' }}">
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label class="filter-label">Select Time</label>
+                        <input type="datetime-local" name="start_time"
+                               value="{{ start_time|default:'' }}"
+                               class="filter-input">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">&nbsp;</label>
+                        <input type="datetime-local" name="end_time"
+                               value="{{ end_time|default:'' }}"
+                               class="filter-input">
+                    </div>
+                    <button type="submit" class="btn-search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        Search
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Results -->
+        <div class="results-card">
+            <div class="results-header">
+                <span class="results-title">Hasil Rekaman</span>
+                {% if result and result.success and result.data %}
+                <span class="badge-count">{{ result.data|length }} rekaman</span>
+                {% endif %}
+            </div>
+
+            {% if result %}
+                {% if result.success %}
+                    {% if result.data %}
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="col-num">No</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th class="col-dl">Download</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in result.data %}
+                                <tr>
+                                    <td class="col-num">{{ forloop.counter }}</td>
+                                    <td class="time-cell">{{ row.start_time }}</td>
+                                    <td class="time-end">{{ row.end_time }}</td>
+                                    <td class="col-dl">
+                                        <form method="POST" action="/download/" target="_blank" style="display:inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="ip"           value="{{ ip }}">
+                                            <input type="hidden" name="username"     value="{{ username }}">
+                                            <input type="hidden" name="password"     value="{{ password }}">
+                                            <input type="hidden" name="playback_uri" value="{{ row.playback_uri }}">
+                                            <input type="hidden" name="start_time"   value="{{ row.start_time }}">
+                                            <button type="submit" class="btn-dl">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                </svg>
+                                                Download
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% else %}
+                    <div class="state-box">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V7l-5-5H7a2 2 0 00-2 2v13a2 2 0 002 2z"/>
+                        </svg>
+                        <p>Tidak ada rekaman dalam rentang waktu ini.</p>
+                    </div>
+                    {% endif %}
+
+                    {% if result.raw_xml %}
+                    <details style="padding:14px 20px;border-top:1px solid #f1f5f9">
+                        <summary style="font-size:12px;color:#64748b;cursor:pointer;font-weight:600">Debug XML Response</summary>
+                        <pre style="background:#0f172a;color:#4ade80;padding:12px;border-radius:8px;font-size:11px;overflow:auto;max-height:220px;margin-top:8px">{{ result.raw_xml }}</pre>
+                    </details>
+                    {% endif %}
+
+                {% else %}
+                <div class="error-box">⚠ {{ result.error }}</div>
+                {% endif %}
+
+            {% else %}
+            <div class="state-box">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                <p>Pilih rentang waktu di atas lalu tekan Search.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="page-footer">GeoHikvision · Hikvision ISAPI Recording Search</div>
+    </div>
+
+</body>
+</html>

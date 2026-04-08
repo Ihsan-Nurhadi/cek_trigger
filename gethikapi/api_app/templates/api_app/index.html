@@ -1,292 +1,746 @@
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hikvision Recording Search</title>
-    <!-- TailwindCSS for quick responsive styling -->
+    <title>GeoHikvision View</title>
+    <meta name="description" content="Dashboard monitoring kamera Hikvision dengan peta interaktif dan notifikasi motion real-time.">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-            background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
+        body { font-family: 'Outfit', sans-serif; }
+        #map { height: 100%; width: 100%; z-index: 10; }
+        .glass-panel { background: rgba(255,255,255,0.92); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+
+        /* ── Sidebar Notifikasi ── */
+        #notifSidebar {
+            position: fixed;
+            top: 80px;
+            right: -360px;
+            width: 340px;
+            height: calc(100vh - 80px);
+            background: rgba(15, 23, 42, 0.97);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(99,102,241,.25);
+            z-index: 900;
+            display: flex;
+            flex-direction: column;
+            transition: right .35s cubic-bezier(.4,0,.2,1);
+            box-shadow: -8px 0 40px rgba(0,0,0,.4);
+        }
+        #notifSidebar.open { right: 0; }
+
+        .notif-item {
+            border-left: 3px solid transparent;
+            transition: background .2s;
+            animation: slideIn .3s ease;
+        }
+        .notif-item.motion_start { border-left-color: #ef4444; }
+        .notif-item.motion_stop  { border-left-color: #22c55e; }
+        .notif-item:hover        { background: rgba(255,255,255,.06) !important; }
+        @keyframes slideIn {
+            from { opacity:0; transform: translateX(20px); }
+            to   { opacity:1; transform: translateX(0); }
         }
 
-        @keyframes gradientBG {
-            0% {
-                background-position: 0% 50%;
-            }
-
-            50% {
-                background-position: 100% 50%;
-            }
-
-            100% {
-                background-position: 0% 50%;
-            }
+        /* ── Bell Badge ── */
+        #bellBadge {
+            position: absolute;
+            top: -4px; right: -4px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 18px; height: 18px;
+            border-radius: 9px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 4px;
+            animation: badge-pulse 2s infinite;
+        }
+        #bellBadge.hidden-badge { display: none; }
+        @keyframes badge-pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
+            50%      { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
         }
 
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.4);
+        /* ── Bell Dropdown ── */
+        #bellDropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: 320px;
+            background: rgba(15,23,42,.97);
+            border: 1px solid rgba(99,102,241,.2);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,.4);
+            overflow: hidden;
+            z-index: 999;
+            display: none;
+            animation: dropdownIn .2s ease;
+        }
+        #bellDropdown.open { display: block; }
+        @keyframes dropdownIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
-        .input-stylish {
-            background: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
+        /* ── Site Modal ── */
+        .form-input {
+            width: 100%;
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 8px;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color .2s;
         }
+        .form-input:focus { border-color: #6366f1; }
+        .form-input::placeholder { color: #64748b; }
+        .form-label { font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: block; font-weight: 500; }
 
-        .input-stylish:focus {
-            box-shadow: 0 0 0 3px rgba(253, 160, 133, 0.4);
-            border-color: #fda085;
-        }
-
-        .btn-gradient {
-            background: linear-gradient(to right, #ff758c 0%, #ff7eb3 100%);
-            transition: all 0.3s ease;
-        }
-
-        .btn-gradient:hover {
-            box-shadow: 0 10px 20px -10px rgba(255, 117, 140, 0.7);
-            transform: translateY(-2px);
-        }
+        /* ── scrollbar ── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
     </style>
 </head>
+<body class="bg-gray-50 flex flex-col h-screen overflow-hidden">
 
-<body class="text-gray-800 antialiased min-h-screen flex flex-col">
+    <!-- ══════════════════════ HEADER ══════════════════════ -->
+    <header id="mainHeader" class="glass-panel shadow-sm py-4 h-[80px] flex items-center justify-between px-6 z-50 relative border-b border-gray-200">
+        <!-- Logo -->
+        <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 tracking-tight">GeoHikvision View</h1>
+        </div>
 
-    <!-- Header -->
-    <header class="glass-panel shadow-sm py-5 sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-6 flex justify-between items-center">
-            <h1
-                class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-pink-500 tracking-tight">
-                Hikvision ISUP Viewer</h1>
-            <!-- <span
-                class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase"></span> -->
+        <!-- Right actions -->
+        <div class="flex items-center gap-2">
+            <!-- Kelola Site button -->
+            <button id="btnManageSites" onclick="openSiteModal()"
+                class="flex items-center gap-2 bg-gradient-to-r from-slate-700 to-slate-800 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-85 transition shadow">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                </svg>
+                Kelola Site
+            </button>
+
+            <!-- Toggle Sidebar button -->
+            <button id="btnToggleSidebar" onclick="toggleSidebar()"
+                class="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-85 transition shadow">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                Notifikasi
+            </button>
+
+            <!-- Bell Icon -->
+            <div class="relative" id="bellWrapper">
+                <button id="btnBell" onclick="toggleBellDropdown()"
+                    class="relative p-2 rounded-xl bg-white border border-gray-200 shadow hover:border-indigo-300 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                    <span id="bellBadge" class="hidden-badge">0</span>
+                </button>
+
+                <!-- Bell Dropdown -->
+                <div id="bellDropdown">
+                    <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                        <span class="text-white font-semibold text-sm">🔔 Notifikasi Terbaru</span>
+                        <button onclick="markAllRead()" class="text-indigo-400 text-xs hover:text-indigo-300 transition">Tandai semua dibaca</button>
+                    </div>
+                    <div id="bellNotifList" class="overflow-y-auto max-h-64">
+                        <p class="text-slate-400 text-xs text-center py-6">Belum ada notifikasi.</p>
+                    </div>
+                    <div class="px-4 py-3 border-t border-white/10 text-center">
+                        <button onclick="openSidebar()" class="text-indigo-400 text-xs hover:text-indigo-300 transition font-semibold">
+                            Lihat semua di Sidebar →
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-grow max-w-6xl mx-auto px-6 py-10 w-full flex flex-col lg:flex-row gap-8">
+    <!-- ══════════════════════ MAP ══════════════════════ -->
+    <main class="flex-grow relative overflow-hidden">
+        <div id="map" class="absolute inset-0"></div>
 
-        <!-- Form Section -->
-        <div class="w-full lg:w-1/3">
-            <div class="glass-panel p-8 rounded-2xl shadow-xl">
-                <h2 class="text-2xl font-bold mb-6 text-gray-800">Cari Rekaman</h2>
-
-                <form method="POST" action="/" class="space-y-5">
-                    {% csrf_token %}
-
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">IP Camera / NVR</label>
-                            <input type="text" name="ip" value="{{ ip|default:'' }}" placeholder="192.168.1.100"
-                                required class="w-full px-4 py-2.5 rounded-lg input-stylish outline-none">
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                                <input type="text" name="username" value="{{ username|default:'admin' }}" required
-                                    class="w-full px-4 py-2.5 rounded-lg input-stylish outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                <input type="password" name="password" value="{{ password|default:'' }}" required
-                                    class="w-full px-4 py-2.5 rounded-lg input-stylish outline-none">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Track ID / Channel</label>
-                            <input type="text" name="track_id" value="{{ track_id|default:'101' }}" required
-                                class="w-full px-4 py-2.5 rounded-lg input-stylish outline-none">
-                            <p class="text-xs text-gray-500 mt-1">Coba `101` (Ch 1), `201` (Ch 2), atau `1` (Kamera IP).
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t border-gray-200 border-dashed space-y-4">
-                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Rentang Waktu <span
-                                class="text-xs font-normal lowercase">(Opsional)</span></h3>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Waktu Mulai</label>
-                            <input type="datetime-local" name="start_time" value="{{ start_time|default:'' }}"
-                                class="w-full px-4 py-2.5 rounded-lg input-stylish outline-none text-gray-600">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Waktu Selesai</label>
-                            <input type="datetime-local" name="end_time" value="{{ end_time|default:'' }}"
-                                class="w-full px-4 py-2.5 rounded-lg input-stylish outline-none text-gray-600">
-                        </div>
-                    </div>
-
-                    <button type="submit"
-                        class="w-full mt-6 btn-gradient text-white font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 text-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        Cari Video
-                    </button>
-                    <p class="text-xs text-center text-gray-500 mt-3">Kosongkan waktu untuk mencari rekaman hari ini.
-                    </p>
-                </form>
+        <!-- ══ NOTIFICATION SIDEBAR ══ -->
+        <div id="notifSidebar">
+            <!-- Sidebar Header -->
+            <div class="px-4 py-4 flex items-center justify-between border-b border-white/10 flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span class="text-white font-bold text-sm tracking-wide">🔔 Notifikasi Live</span>
+                </div>
+                <button onclick="closeSidebar()" class="text-slate-400 hover:text-white transition p-1 rounded">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
-        </div>
 
-        <!-- Results Section -->
-        <div class="w-full lg:w-2/3">
-            {% if result %}
-            <div class="glass-panel p-8 rounded-2xl shadow-xl h-full transition-all duration-500">
-
-                {% if result.success %}
-                <div class="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
-                    <div class="flex items-center gap-3">
-                        <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M5 13l4 4L19 7"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-bold text-gray-800">Komunikasi Berhasil</h2>
-                            <p class="text-sm text-gray-500">Kamera memberikan balasan XML valid.</p>
-                        </div>
-                    </div>
-                    <span
-                        class="bg-gradient-to-r from-green-400 to-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">Response
-                        200 OK</span>
-                </div>
-
-                {% if result.data %}
-                <div class="overflow-hidden rounded-xl border border-gray-100 shadow-sm bg-white mb-6">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead class="bg-gray-50/50">
-                            <tr>
-                                <th
-                                    class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    Start Time</th>
-                                <th
-                                    class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    End Time</th>
-                                <th
-                                    class="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                    Playback URI</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            {% for row in result.data %}
-                            <tr class="hover:bg-orange-50/30 transition duration-150">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-700">{{ row.start_time }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ row.end_time }}</td>
-                                <td class="px-6 py-4 text-sm font-medium">
-                                    <form method="POST" action="/download/" target="_blank" class="inline"
-                                        onsubmit="this.password.value = document.querySelector('input[name=password]').value">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="ip" value="{{ ip }}">
-                                        <input type="hidden" name="username" value="{{ username }}">
-                                        <input type="hidden" name="password" value="">
-                                        <input type="hidden" name="playback_uri" value="{{ row.playback_uri }}">
-                                        <input type="hidden" name="start_time" value="{{ row.start_time }}">
-                                        <button type="submit"
-                                            class="bg-gradient-to-r from-pink-500 to-orange-400 hover:from-pink-600 hover:to-orange-500 text-white px-4 py-1.5 rounded-full shadow-sm transition transform hover:-translate-y-0.5 text-xs tracking-wide">
-                                            <svg xmlns="http://www.w3.org/2000/svg"
-                                                class="h-3 w-3 inline-block -mt-0.5 mr-1" fill="none"
-                                                viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                            </svg>
-                                            Download (.mp4)
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-10 bg-white/50 rounded-xl border border-dashed border-gray-300 mb-6">
-                    <div class="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-400" fill="none"
-                            viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-gray-700 mb-1">Tidak Ditemukan</h2>
-                        <p class="text-sm text-gray-500">Kamera tidak mengembalikan daftar video. Cek Track ID/Waktu.
-                        </p>
-                </div>
-                {% endif %}
-
-                {% if result.raw_xml %}
-                <div class="mt-4">
-                    <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Raw XML Response (Untuk Debugging):
-                    </p>
-                    <pre
-                        class="bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-auto max-h-64">{{ result.raw_xml }}</pre>
-                </div>
-                {% endif %}
-
-                {% else %}
-                <div class="bg-red-50/80 border border-red-200 p-6 rounded-xl shadow-sm">
-                    <div class="flex items-start">
-                        <div class="flex-shrink-0 bg-red-100 p-2 rounded-full">
-                            <svg class="h-6 w-6 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                                    clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <div class="ml-4 w-full">
-                            <h3 class="text-lg font-bold text-red-800 mb-1">Terjadi Kesalahan</h3>
-                            <div class="text-sm text-red-600 font-mono bg-red-100/50 p-3 rounded mt-2">
-                                {{ result.error }}
-                            </div>
-                            {% if result.raw_xml %}
-                            <div class="mt-4">
-                                <p class="text-xs font-semibold text-red-700 uppercase mb-2">Raw XML Array:</p>
-                                <pre
-                                    class="bg-red-900 text-red-100 p-3 rounded text-xs overflow-auto">{{ result.raw_xml }}</pre>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
+            <!-- Stats bar -->
+            <div class="px-4 py-3 bg-white/5 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
+                <span class="text-slate-400 text-xs">Total: <span id="sidebarTotal" class="text-white font-semibold">0</span></span>
+                <span class="text-slate-400 text-xs">Belum dibaca: <span id="sidebarUnread" class="text-red-400 font-semibold">0</span></span>
+                <button onclick="markAllRead()" class="text-indigo-400 text-xs hover:text-indigo-300 transition">Bersihkan</button>
             </div>
-            {% else %}
-            <div
-                class="glass-panel p-10 rounded-2xl shadow-sm h-full flex items-center justify-center border-dashed border border-white">
-                <div class="text-center">
-                    <div class="relative w-24 h-24 mx-auto mb-6">
-                        <div class="absolute inset-0 bg-indigo-500 rounded-full opacity-20 animate-ping"></div>
-                        <div
-                            class="absolute inset-0 bg-gradient-to-r from-orange-400 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                        </div>
-                    </div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Area Tampil Rekaman</h2>
-                    <p class="text-gray-500 max-w-sm mx-auto">Silakan isi formulir di sebelah kiri untuk mencari rekaman
-                        di perangkat Hikvision Anda.</p>
+
+            <!-- Notif List -->
+            <div id="sidebarNotifList" class="flex-1 overflow-y-auto py-2">
+                <div class="text-center py-12 text-slate-500 text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                    <p>Menunggu motion event...</p>
+                    <p class="text-xs mt-1 opacity-60">Update otomatis saat ada gerakan</p>
                 </div>
             </div>
-            {% endif %}
+
+            <!-- SSE Status -->
+            <div class="px-4 py-3 border-t border-white/10 flex-shrink-0 flex items-center gap-2">
+                <div id="sseStatus" class="w-2 h-2 rounded-full bg-slate-500"></div>
+                <span id="sseStatusText" class="text-slate-500 text-xs">Menghubungkan...</span>
+            </div>
         </div>
     </main>
 
+    <!-- ══════════════════════ MODAL: Live Stream ══════════════════════ -->
+    <div id="videoModal" class="modal fixed inset-0 z-[1000] items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-4xl max-h-[90vh] flex flex-col transform scale-95 transition-transform duration-300" id="streamModalContent">
+            <div class="px-6 py-4 flex justify-between items-center border-b border-gray-100 bg-gray-50">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-red-100 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800" id="cameraTitle">Live View</h2>
+                        <p class="text-xs text-gray-400 font-mono" id="cameraIP">—</p>
+                    </div>
+                </div>
+                <button onclick="closeStreamModal()" class="text-gray-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="relative bg-black flex-grow min-h-[400px] flex items-center justify-center">
+                <div id="streamLoading" class="absolute inset-0 flex flex-col items-center justify-center text-white/70">
+                    <svg class="animate-spin h-10 w-10 mb-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="font-mono text-sm tracking-widest">CONNECTING TO CAMERA...</p>
+                </div>
+                <img id="streamImg" class="w-full max-h-full object-contain relative z-10" alt="Video Stream"
+                    onload="document.getElementById('streamLoading').style.display='none';"
+                    onerror="handleStreamError()" />
+            </div>
+            <div id="streamError" class="hidden bg-red-100 text-red-700 px-6 py-3 text-sm font-semibold text-center border-t border-red-200">
+                Gagal memuat video stream. Pastikan kamera menyala dan dapat diakses.
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════ MODAL: Kelola Site ══════════════════════ -->
+    <div id="siteModal" class="modal fixed inset-0 z-[1100] items-center justify-center bg-black/75 backdrop-blur-sm">
+        <div class="w-full max-w-lg mx-4 rounded-2xl overflow-hidden shadow-2xl" style="background:#0f172a; border:1px solid rgba(99,102,241,.25);">
+            <!-- Modal Header -->
+            <div class="px-6 py-5 flex items-center justify-between border-b border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-indigo-500/20 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-white font-bold text-lg">Kelola Site Kamera</h2>
+                        <p class="text-slate-400 text-xs">Maksimal 2 site kamera</p>
+                    </div>
+                </div>
+                <button onclick="closeSiteModal()" class="text-slate-400 hover:text-white transition p-1 rounded">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto max-h-[70vh]">
+                <!-- Site List -->
+                <div class="mb-6">
+                    <h3 class="text-slate-300 text-xs font-semibold uppercase tracking-wider mb-3">Site Terdaftar</h3>
+                    <div id="siteList" class="space-y-2">
+                        <p class="text-slate-500 text-sm text-center py-4">Memuat data site...</p>
+                    </div>
+                </div>
+
+                <!-- Add Site Form -->
+                <div id="addSiteSection">
+                    <h3 class="text-slate-300 text-xs font-semibold uppercase tracking-wider mb-3">Tambah Site Baru</h3>
+                    <div id="siteFormMsg" class="hidden mb-3 px-3 py-2 rounded-lg text-xs font-semibold"></div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="col-span-2">
+                            <label class="form-label">Nama Site *</label>
+                            <input id="sf_name" type="text" class="form-input" placeholder="e.g. Site Kantor Pusat">
+                        </div>
+                        <div>
+                            <label class="form-label">IP Kamera *</label>
+                            <input id="sf_ip" type="text" class="form-input" placeholder="192.168.1.100">
+                        </div>
+                        <div>
+                            <label class="form-label">Port</label>
+                            <input id="sf_port" type="number" class="form-input" placeholder="80" value="80">
+                        </div>
+                        <div>
+                            <label class="form-label">Username *</label>
+                            <input id="sf_user" type="text" class="form-input" placeholder="admin">
+                        </div>
+                        <div>
+                            <label class="form-label">Password *</label>
+                            <input id="sf_pass" type="password" class="form-input" placeholder="••••••••">
+                        </div>
+                        <div>
+                            <label class="form-label">Track ID (untuk logs)</label>
+                            <input id="sf_track" type="text" class="form-input" placeholder="1" value="1">
+                        </div>
+                        <div>
+                            <label class="form-label">Latitude</label>
+                            <input id="sf_lat" type="number" step="any" class="form-input" placeholder="-6.2088">
+                        </div>
+                        <div>
+                            <label class="form-label">Longitude</label>
+                            <input id="sf_lng" type="number" step="any" class="form-input" placeholder="106.8456">
+                        </div>
+                    </div>
+
+                    <button id="btnAddSite" onclick="addSite()"
+                        class="mt-4 w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-semibold py-2.5 rounded-xl hover:opacity-85 transition text-sm flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Tambah Site
+                    </button>
+
+                    <p id="maxSiteMsg" class="hidden mt-3 text-amber-400 text-xs text-center bg-amber-400/10 rounded-lg px-3 py-2">
+                        ⚠️ Batas maksimal 2 site telah tercapai. Hapus salah satu site untuk menambahkan yang baru.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════ SCRIPTS ══════════════════════ -->
+    <script>
+    // ── State ────────────────────────────────────────────────────────────
+    let SITES    = [];
+    let markers  = {};
+    let sidebarOpen = false;
+
+    // ── Map Setup ────────────────────────────────────────────────────────
+    const map = L.map('map').setView([-6.2088, 106.8456], 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd', maxZoom: 19
+    }).addTo(map);
+
+    function makeSiteIcon(alerting = false) {
+        const color = alerting ? '#ef4444' : '#3b82f6';
+        return L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="relative flex h-9 w-9 items-center justify-center">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style="background:${color}"></span>
+                <span class="relative inline-flex rounded-full h-5 w-5 border-2 border-white shadow-lg" style="background:${color}"></span>
+            </div>`,
+            iconSize: [36, 36], iconAnchor: [18, 18]
+        });
+    }
+
+    function renderMarkers() {
+        // Hapus marker lama
+        Object.values(markers).forEach(m => map.removeLayer(m));
+        markers = {};
+
+        SITES.forEach(site => {
+            if (!site.lat && !site.lng) return;
+
+            const logsUrl = `/logs-history/?ip=${encodeURIComponent(site.ip)}`
+                + `&username=${encodeURIComponent(site.username)}`
+                + `&password=${encodeURIComponent(site.password)}`
+                + `&track_id=${encodeURIComponent(site.track_id)}&autoload=1`;
+
+            const popupHtml = `<div style="font-family:'Outfit',sans-serif;min-width:170px;padding:8px 4px">
+                <p style="font-weight:700;color:#1e293b;font-size:14px;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #f1f5f9">${site.name}</p>
+                <div style="display:flex;gap:8px">
+                    <button onclick="openStreamModal('${site.ip}','${site.name}')"
+                        style="flex:1;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border:none;border-radius:10px;padding:8px 6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px"
+                        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        Live Stream
+                    </button>
+                    <a href="${logsUrl}"
+                        style="flex:1;background:linear-gradient(135deg,#111827,#374151);color:#fff;border:none;border-radius:10px;padding:8px 6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none"
+                        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                        Logs
+                    </a>
+                </div>
+                <p style="font-size:10px;color:#94a3b8;margin:8px 0 0 0;text-align:center">IP: ${site.ip}</p>
+            </div>`;
+
+            const marker = L.marker([site.lat, site.lng], { icon: makeSiteIcon() }).addTo(map);
+            marker.bindPopup(popupHtml, { closeButton: false, className: 'custom-popup', maxWidth: 220 });
+            markers[site.id] = marker;
+        });
+    }
+
+    async function loadSites() {
+        try {
+            const res = await fetch('/sites/');
+            const data = await res.json();
+            SITES = data.sites;
+            renderMarkers();
+        } catch (e) {
+            console.error('Gagal load sites:', e);
+        }
+    }
+
+    // ── Stream Modal ──────────────────────────────────────────────────────
+    const videoModal        = document.getElementById('videoModal');
+    const streamModalContent = document.getElementById('streamModalContent');
+    const streamImg         = document.getElementById('streamImg');
+    const streamLoading     = document.getElementById('streamLoading');
+    const streamError       = document.getElementById('streamError');
+
+    function openStreamModal(ip, siteName) {
+        document.getElementById('cameraTitle').textContent = 'Live View: ' + siteName;
+        document.getElementById('cameraIP').textContent    = 'IP: ' + ip;
+        videoModal.classList.add('active');
+        setTimeout(() => streamModalContent.classList.replace('scale-95', 'scale-100'), 10);
+        streamError.classList.add('hidden');
+        streamLoading.style.display = 'flex';
+        streamImg.src = '/stream/?t=' + Date.now();
+        streamImg.style.display = 'block';
+    }
+    function closeStreamModal() {
+        streamModalContent.classList.replace('scale-100', 'scale-95');
+        setTimeout(() => { videoModal.classList.remove('active'); streamImg.src = ''; }, 300);
+    }
+    function handleStreamError() {
+        if (streamImg.src && !streamImg.src.endsWith('/')) {
+            streamLoading.style.display = 'none';
+            streamImg.style.display     = 'none';
+            streamError.classList.remove('hidden');
+        }
+    }
+    videoModal.addEventListener('click', e => { if (e.target === videoModal) closeStreamModal(); });
+
+    // ── Notification Sidebar ─────────────────────────────────────────────
+    function toggleSidebar() { sidebarOpen ? closeSidebar() : openSidebar(); }
+    function openSidebar()  { document.getElementById('notifSidebar').classList.add('open'); sidebarOpen = true; }
+    function closeSidebar() { document.getElementById('notifSidebar').classList.remove('open'); sidebarOpen = false; }
+
+    // ── Bell Dropdown ─────────────────────────────────────────────────────
+    const bellDropdown = document.getElementById('bellDropdown');
+    function toggleBellDropdown() {
+        bellDropdown.classList.toggle('open');
+        if (bellDropdown.classList.contains('open')) loadNotifications();
+    }
+    document.addEventListener('click', e => {
+        if (!document.getElementById('bellWrapper').contains(e.target))
+            bellDropdown.classList.remove('open');
+    });
+
+    // ── Notifications ─────────────────────────────────────────────────────
+    let allNotifications = [];
+
+    function notifIcon(event_type) {
+        return event_type === 'motion_start'
+            ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:6px;flex-shrink:0"></span>'
+            : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:6px;flex-shrink:0"></span>';
+    }
+
+    function eventLabel(event_type) {
+        return event_type === 'motion_start' ? 'Motion Terdeteksi' : 'Motion Berhenti';
+    }
+
+    function buildNotifHtml(n, compact = false) {
+        const icon   = notifIcon(n.event_type);
+        const label  = eventLabel(n.event_type);
+        const unread = !n.is_read ? 'background:rgba(99,102,241,.08);' : '';
+        if (compact) {
+            return `<div class="px-4 py-3 border-b border-white/5 flex items-center gap-2" style="${unread}">
+                ${icon}
+                <div style="flex:1;min-width:0">
+                    <p class="text-white text-xs font-semibold truncate">${label}</p>
+                    <p class="text-slate-400 text-xs truncate">${n.site_name} · Ch${n.channel}</p>
+                    <p class="text-slate-500 text-xs">${n.timestamp}</p>
+                </div>
+                ${!n.is_read ? '<div style="width:6px;height:6px;border-radius:50%;background:#6366f1;flex-shrink:0"></div>' : ''}
+            </div>`;
+        }
+        return `<div class="notif-item px-4 py-3 ${n.event_type}" style="${unread}">
+            <div class="flex items-start gap-2">
+                <div style="margin-top:3px">${icon}</div>
+                <div style="flex:1;min-width:0">
+                    <p class="text-white text-xs font-semibold">${label}</p>
+                    <p class="text-slate-400 text-xs mt-0.5">📍 ${n.site_name}</p>
+                    <p class="text-slate-500 text-xs">Channel: ${n.channel}</p>
+                    <p class="text-slate-600 text-xs mt-1">${n.timestamp}</p>
+                </div>
+                ${!n.is_read ? '<div style="width:6px;height:6px;border-radius:50%;background:#6366f1;flex-shrink:0;margin-top:4px"></div>' : ''}
+            </div>
+        </div>`;
+    }
+
+    async function loadNotifications() {
+        try {
+            const res  = await fetch('/notifications/');
+            const data = await res.json();
+            allNotifications = data.notifications;
+            renderNotifications(data.notifications, data.unread_count);
+        } catch (e) {
+            console.error('Gagal load notifications:', e);
+        }
+    }
+
+    function renderNotifications(notifications, unreadCount) {
+        // Badge
+        const badge = document.getElementById('bellBadge');
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+            badge.classList.remove('hidden-badge');
+        } else {
+            badge.classList.add('hidden-badge');
+        }
+
+        // Sidebar stats
+        document.getElementById('sidebarTotal').textContent  = notifications.length;
+        document.getElementById('sidebarUnread').textContent = unreadCount;
+
+        // Sidebar list (maks 20)
+        const sidebarList = document.getElementById('sidebarNotifList');
+        if (notifications.length === 0) {
+            sidebarList.innerHTML = `<div class="text-center py-12 text-slate-500 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                <p>Menunggu motion event...</p>
+            </div>`;
+        } else {
+            sidebarList.innerHTML = notifications.map(n => buildNotifHtml(n)).join('');
+        }
+
+        // Bell dropdown list (5 terbaru)
+        const bellList = document.getElementById('bellNotifList');
+        const top5 = notifications.slice(0, 5);
+        if (top5.length === 0) {
+            bellList.innerHTML = '<p class="text-slate-400 text-xs text-center py-6">Belum ada notifikasi.</p>';
+        } else {
+            bellList.innerHTML = top5.map(n => buildNotifHtml(n, true)).join('');
+        }
+    }
+
+    async function markAllRead() {
+        await fetch('/notifications/mark-read/', { method: 'POST' });
+        await loadNotifications();
+    }
+
+    // ── SSE Real-time ─────────────────────────────────────────────────────
+    function connectSSE() {
+        const sseStatus     = document.getElementById('sseStatus');
+        const sseStatusText = document.getElementById('sseStatusText');
+
+        const evtSource = new EventSource('/notifications/sse/');
+
+        evtSource.onopen = () => {
+            sseStatus.style.background     = '#22c55e';
+            sseStatusText.textContent      = 'Terhubung (live)';
+            sseStatusText.style.color      = '#22c55e';
+        };
+
+        evtSource.onmessage = e => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.type === 'connected') return;
+
+                // Prepend ke list lokal
+                allNotifications.unshift(data);
+                if (allNotifications.length > 20) allNotifications.pop();
+
+                const unread = allNotifications.filter(n => !n.is_read).length;
+                renderNotifications(allNotifications, unread);
+
+                // Flash marker kamera yang terdeteksi
+                const site = SITES.find(s => s.name === data.site_name);
+                if (site && markers[site.id] && data.event_type === 'motion_start') {
+                    markers[site.id].setIcon(makeSiteIcon(true));
+                    setTimeout(() => markers[site.id].setIcon(makeSiteIcon(false)), 8000);
+                }
+
+                // Buka sidebar otomatis jika tertutup
+                if (!sidebarOpen) openSidebar();
+
+            } catch (err) {}
+        };
+
+        evtSource.onerror = () => {
+            sseStatus.style.background     = '#ef4444';
+            sseStatusText.textContent      = 'Terputus — mencoba ulang...';
+            sseStatusText.style.color      = '#ef4444';
+            // Browser akan auto-reconnect EventSource
+        };
+    }
+
+    // ── Site Management ───────────────────────────────────────────────────
+    function openSiteModal() {
+        document.getElementById('siteModal').classList.add('active');
+        loadSiteList();
+    }
+    function closeSiteModal() {
+        document.getElementById('siteModal').classList.remove('active');
+    }
+    document.getElementById('siteModal').addEventListener('click', e => {
+        if (e.target === document.getElementById('siteModal')) closeSiteModal();
+    });
+
+    async function loadSiteList() {
+        const res  = await fetch('/sites/');
+        const data = await res.json();
+        SITES = data.sites;
+        renderMarkers();
+
+        const container = document.getElementById('siteList');
+        const maxMsg    = document.getElementById('maxSiteMsg');
+        const addForm   = document.getElementById('addSiteSection');
+        const btnAdd    = document.getElementById('btnAddSite');
+
+        if (data.sites.length === 0) {
+            container.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">Belum ada site terdaftar.</p>';
+        } else {
+            container.innerHTML = data.sites.map(s => `
+                <div class="flex items-center gap-3 px-4 py-3 rounded-xl border border-white/8" style="background:rgba(255,255,255,.04)">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-white font-semibold text-sm truncate">${s.name}</p>
+                        <p class="text-slate-400 text-xs">${s.ip}:${s.port}</p>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded-full font-semibold ${s.is_active
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-slate-500/20 text-slate-400'}">${s.is_active ? 'Aktif' : 'Nonaktif'}</span>
+                    <button onclick="toggleSiteMonitor(${s.id})"
+                        class="text-slate-400 hover:text-indigo-400 transition p-1" title="${s.is_active ? 'Nonaktifkan' : 'Aktifkan'} monitor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728M12 8v4l3 3"/>
+                        </svg>
+                    </button>
+                    <button onclick="deleteSite(${s.id})"
+                        class="text-slate-400 hover:text-red-400 transition p-1" title="Hapus site">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Tampilkan/sembunyikan form tambah
+        if (data.sites.length >= 2) {
+            maxMsg.classList.remove('hidden');
+            btnAdd.disabled = true;
+            btnAdd.classList.add('opacity-40', 'cursor-not-allowed');
+        } else {
+            maxMsg.classList.add('hidden');
+            btnAdd.disabled = false;
+            btnAdd.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+    }
+
+    async function addSite() {
+        const body = {
+            name    : document.getElementById('sf_name').value.trim(),
+            ip      : document.getElementById('sf_ip').value.trim(),
+            port    : document.getElementById('sf_port').value || '80',
+            username: document.getElementById('sf_user').value.trim(),
+            password: document.getElementById('sf_pass').value.trim(),
+            track_id: document.getElementById('sf_track').value.trim() || '1',
+            lat     : document.getElementById('sf_lat').value || '0',
+            lng     : document.getElementById('sf_lng').value || '0',
+        };
+
+        const msgEl = document.getElementById('siteFormMsg');
+        if (!body.name || !body.ip || !body.username || !body.password) {
+            msgEl.textContent = '⚠️ Nama, IP, Username, dan Password wajib diisi.';
+            msgEl.className   = 'mb-3 px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400';
+            msgEl.classList.remove('hidden');
+            return;
+        }
+
+        const res  = await fetch('/sites/add/', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            msgEl.textContent = '✅ Site berhasil ditambahkan!';
+            msgEl.className   = 'mb-3 px-3 py-2 rounded-lg text-xs font-semibold bg-green-500/20 text-green-400';
+            msgEl.classList.remove('hidden');
+            // Reset form
+            ['sf_name','sf_ip','sf_user','sf_pass','sf_lat','sf_lng'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            await loadSiteList();
+        } else {
+            msgEl.textContent = '❌ ' + (data.error || 'Gagal menambahkan site.');
+            msgEl.className   = 'mb-3 px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400';
+            msgEl.classList.remove('hidden');
+        }
+    }
+
+    async function deleteSite(siteId) {
+        if (!confirm('Hapus site ini? Monitor akan dihentikan.')) return;
+        const res  = await fetch(`/sites/${siteId}/delete/`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) await loadSiteList();
+        else alert('Gagal menghapus site: ' + data.error);
+    }
+
+    async function toggleSiteMonitor(siteId) {
+        const res  = await fetch(`/sites/${siteId}/toggle/`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) await loadSiteList();
+        else alert('Gagal mengubah status: ' + data.error);
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    loadSites();
+    loadNotifications();
+    connectSSE();
+    </script>
+
+    <style>
+        .leaflet-popup-content-wrapper {
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px -5px rgba(0,0,0,.15);
+        }
+        .custom-popup .leaflet-popup-content { margin: 0; line-height: inherit; }
+        .leaflet-popup-tip-container { display: none; }
+    </style>
 </body>
 </html>
