@@ -47,45 +47,42 @@
             to   { opacity:1; transform: translateX(0); }
         }
 
-        /* ── Bell Badge ── */
-        #bellBadge {
-            position: absolute;
-            top: -4px; right: -4px;
-            background: #ef4444;
-            color: #fff;
-            font-size: 10px;
-            font-weight: 700;
-            min-width: 18px; height: 18px;
-            border-radius: 9px;
-            display: flex; align-items: center; justify-content: center;
-            padding: 0 4px;
-            animation: badge-pulse 2s infinite;
+        /* ── Floating Toast Notifikasi ── */
+        #toastContainer {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
         }
-        #bellBadge.hidden-badge { display: none; }
-        @keyframes badge-pulse {
-            0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.5); }
-            50%      { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+        .toast-notif {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(99,102,241,.3);
+            border-radius: 12px;
+            padding: 12px 20px;
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toastSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            pointer-events: auto;
         }
-
-        /* ── Bell Dropdown ── */
-        #bellDropdown {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            width: 320px;
-            background: rgba(15,23,42,.97);
-            border: 1px solid rgba(99,102,241,.2);
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,.4);
-            overflow: hidden;
-            z-index: 999;
-            display: none;
-            animation: dropdownIn .2s ease;
+        .toast-notif.fade-out {
+            animation: toastFadeOut 0.5s ease forwards;
         }
-        #bellDropdown.open { display: block; }
-        @keyframes dropdownIn {
-            from { opacity: 0; transform: translateY(-8px); }
-            to   { opacity: 1; transform: translateY(0); }
+        @keyframes toastSlideIn {
+            from { opacity: 0; transform: translateY(-50px) scale(0.9); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes toastFadeOut {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to { opacity: 0; transform: translateY(-20px) scale(0.9); }
         }
 
         /* ── Site Modal ── */
@@ -121,7 +118,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
             </div>
-            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 tracking-tight">GeoHikvision View</h1>
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 tracking-tight">Network Management System View</h1>
         </div>
 
         <!-- Right actions -->
@@ -144,32 +141,8 @@
                 Notifikasi
             </button>
 
-            <!-- Bell Icon -->
-            <div class="relative" id="bellWrapper">
-                <button id="btnBell" onclick="toggleBellDropdown()"
-                    class="relative p-2 rounded-xl bg-white border border-gray-200 shadow hover:border-indigo-300 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                    <span id="bellBadge" class="hidden-badge">0</span>
-                </button>
-
-                <!-- Bell Dropdown -->
-                <div id="bellDropdown">
-                    <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-                        <span class="text-white font-semibold text-sm">🔔 Notifikasi Terbaru</span>
-                        <button onclick="markAllRead()" class="text-indigo-400 text-xs hover:text-indigo-300 transition">Tandai semua dibaca</button>
-                    </div>
-                    <div id="bellNotifList" class="overflow-y-auto max-h-64">
-                        <p class="text-slate-400 text-xs text-center py-6">Belum ada notifikasi.</p>
-                    </div>
-                    <div class="px-4 py-3 border-t border-white/10 text-center">
-                        <button onclick="openSidebar()" class="text-indigo-400 text-xs hover:text-indigo-300 transition font-semibold">
-                            Lihat semua di Sidebar →
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <!-- Toast Container -->
+            <div id="toastContainer"></div>
         </div>
     </header>
 
@@ -183,7 +156,7 @@
             <div class="px-4 py-4 flex items-center justify-between border-b border-white/10 flex-shrink-0">
                 <div class="flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                    <span class="text-white font-bold text-sm tracking-wide">🔔 Notifikasi Live</span>
+                    <span class="text-white font-bold text-sm tracking-wide">Notifikasi Live</span>
                 </div>
                 <button onclick="closeSidebar()" class="text-slate-400 hover:text-white transition p-1 rounded">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -455,16 +428,52 @@
     function openSidebar()  { document.getElementById('notifSidebar').classList.add('open'); sidebarOpen = true; }
     function closeSidebar() { document.getElementById('notifSidebar').classList.remove('open'); sidebarOpen = false; }
 
-    // ── Bell Dropdown ─────────────────────────────────────────────────────
-    const bellDropdown = document.getElementById('bellDropdown');
-    function toggleBellDropdown() {
-        bellDropdown.classList.toggle('open');
-        if (bellDropdown.classList.contains('open')) loadNotifications();
+    // ── Floating Toast & Audio ───────────────────────────────────────────
+    function playNotificationSound() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const playTone = (freq, startTime, duration) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0, startTime);
+                gain.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+                gain.gain.linearRampToValueAtTime(0, startTime + duration);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+            const now = audioCtx.currentTime;
+            playTone(880, now, 0.15); // A5
+            playTone(1108.73, now + 0.12, 0.3); // C#6
+        } catch(e) { console.warn("Audio disabled or not supported", e); }
     }
-    document.addEventListener('click', e => {
-        if (!document.getElementById('bellWrapper').contains(e.target))
-            bellDropdown.classList.remove('open');
-    });
+
+    function showToast(notif) {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const icon = notif.event_type === 'motion_start' ? '🔴' : '🟢';
+        const title = notif.event_type === 'motion_start' ? 'Motion Terdeteksi' : 'Motion Berhenti';
+        
+        const el = document.createElement('div');
+        el.className = 'toast-notif';
+        el.innerHTML = `
+            <div style="font-size: 20px;">${icon}</div>
+            <div style="flex:1">
+                <p style="font-weight: 700; font-size: 14px; margin: 0;">${title}</p>
+                <p style="font-size: 12px; color: #cbd5e1; margin: 2px 0 0 0px;">${notif.site_name} (Ch${notif.channel})</p>
+            </div>
+        `;
+        container.appendChild(el);
+        
+        // Timeout 5 detik
+        setTimeout(() => {
+            el.classList.add('fade-out');
+            setTimeout(() => el.remove(), 500); // Tunggu animasi selesai
+        }, 5000);
+    }
 
     // ── Notifications ─────────────────────────────────────────────────────
     let allNotifications = [];
@@ -520,15 +529,6 @@
     }
 
     function renderNotifications(notifications, unreadCount) {
-        // Badge
-        const badge = document.getElementById('bellBadge');
-        if (unreadCount > 0) {
-            badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-            badge.classList.remove('hidden-badge');
-        } else {
-            badge.classList.add('hidden-badge');
-        }
-
         // Sidebar stats
         document.getElementById('sidebarTotal').textContent  = notifications.length;
         document.getElementById('sidebarUnread').textContent = unreadCount;
@@ -544,15 +544,6 @@
             </div>`;
         } else {
             sidebarList.innerHTML = notifications.map(n => buildNotifHtml(n)).join('');
-        }
-
-        // Bell dropdown list (5 terbaru)
-        const bellList = document.getElementById('bellNotifList');
-        const top5 = notifications.slice(0, 5);
-        if (top5.length === 0) {
-            bellList.innerHTML = '<p class="text-slate-400 text-xs text-center py-6">Belum ada notifikasi.</p>';
-        } else {
-            bellList.innerHTML = top5.map(n => buildNotifHtml(n, true)).join('');
         }
     }
 
@@ -586,15 +577,16 @@
                 const unread = allNotifications.filter(n => !n.is_read).length;
                 renderNotifications(allNotifications, unread);
 
+                // Tampilkan Toast Notifikasi dan putar suara
+                showToast(data);
+                playNotificationSound();
+
                 // Flash marker kamera yang terdeteksi
                 const site = SITES.find(s => s.name === data.site_name);
                 if (site && markers[site.id] && data.event_type === 'motion_start') {
                     markers[site.id].setIcon(makeSiteIcon(true));
                     setTimeout(() => markers[site.id].setIcon(makeSiteIcon(false)), 8000);
                 }
-
-                // Buka sidebar otomatis jika tertutup
-                if (!sidebarOpen) openSidebar();
 
             } catch (err) {}
         };
