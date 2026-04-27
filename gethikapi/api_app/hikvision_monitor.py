@@ -216,7 +216,7 @@ class HikvisionMonitor:
             elif state == 'inactive':
                 if s['reported_active']:
                     s['reported_active'] = False
-                    self._save_event(ch, 'motion_stop', ts)
+                    # Tidak perlu menampilkan motion berhenti
 
     def _watchdog_loop(self):
         while not self._stop_event.is_set():
@@ -226,7 +226,7 @@ class HikvisionMonitor:
                     if s['reported_active']:
                         if (now - s['last_active_ts']) >= INACTIVE_TIMEOUT:
                             s['reported_active'] = False
-                            self._save_event(ch, 'motion_stop', now_local_str())
+                            # Tidak perlu menampilkan motion berhenti
             self._stop_event.wait(WATCHDOG_TICK)
 
     def _save_event(self, channel: str, event_type: str, ts_str: str):
@@ -246,6 +246,15 @@ class HikvisionMonitor:
                 event_type=event_type,
             )
             notif.save()  # auto-cap 20 triggered di save()
+            
+            # TRIGGER SNAPSHOT JIKA MOTION_START
+            if event_type == 'motion_start':
+                try:
+                    from .utils_hikvision import capture_snapshot_from_camera
+                    # Jalankan snapshot (blocking operation di thread ini - tapi ok karena timeout kecil)
+                    capture_snapshot_from_camera(self.site_id, "CAMERA")
+                except Exception as e:
+                    print(f"[HikvisionMonitor] Error capturing CAMERA snapshot: {e}")
 
             # Broadcast ke SSE
             sse_broadcast({
@@ -256,7 +265,6 @@ class HikvisionMonitor:
                 'timestamp' : ts_str,
                 'is_read'   : False,
             })
-
         except Exception as e:
             # Jangan crash thread jika DB error
             print(f'[HikvisionMonitor] DB save error: {e}')

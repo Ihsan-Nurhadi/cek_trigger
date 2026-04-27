@@ -64,3 +64,52 @@ class MotionNotification(models.Model):
 
     def __str__(self):
         return f'[{self.event_type}] {self.site_name} ch{self.channel} @ {self.timestamp}'
+
+
+import os
+from django.utils import timezone
+from datetime import timedelta
+
+from django.conf import settings
+
+class SnapshotHistory(models.Model):
+    TRIGGER_CHOICES = [
+        ('CAMERA', 'Camera Motion'),
+        ('PIR_1', 'PIR Sensor 1'),
+        ('PIR_2', 'PIR Sensor 2'),
+        ('PIR_3', 'PIR Sensor 3'),
+        ('PIR_4', 'PIR Sensor 4'),
+    ]
+    
+    site = models.ForeignKey(CameraSite, on_delete=models.CASCADE, related_name='snapshots')
+    trigger_source = models.CharField(max_length=20, choices=TRIGGER_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    image_path = models.CharField(max_length=255) # We will store the path or URL relative to MEDIA_ROOT
+    
+    class Meta:
+        ordering = ['-timestamp']
+        
+    def delete(self, *args, **kwargs):
+        # Auto-delete file format from disk
+        if self.image_path:
+            # We assume image_path is relative to MEDIA_ROOT (e.g. "snapshots/filename.jpg")
+            media_dir = getattr(settings, 'MEDIA_ROOT', os.path.join(settings.BASE_DIR, 'media'))
+            full_path = os.path.join(media_dir, self.image_path)
+            if os.path.exists(full_path):
+                try:
+                    os.remove(full_path)
+                except Exception as e:
+                    pass
+        super().delete(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Hapus data yang lebih tua dari 2 hari
+        cutoff_date = timezone.now() - timedelta(days=2)
+        old_snapshots = SnapshotHistory.objects.filter(timestamp__lt=cutoff_date)
+        for snap in old_snapshots:
+            snap.delete() # Trigger file deletion
+
+    def __str__(self):
+        return f'{self.trigger_source} @ {self.timestamp}'
+

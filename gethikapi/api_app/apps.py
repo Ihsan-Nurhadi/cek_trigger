@@ -26,6 +26,12 @@ class ApiAppConfig(AppConfig):
                 monitor_manager.start_all()
             except Exception as e:
                 print(f'[ApiAppConfig] Monitor startup error: {e}')
+                
+            try:
+                from .mqtt_service import start_mqtt
+                start_mqtt()
+            except Exception as e:
+                print(f'[ApiAppConfig] MQTT startup error: {e}')
 
         # Jalankan setelah Django siap penuh (delay minimal via thread)
         import threading

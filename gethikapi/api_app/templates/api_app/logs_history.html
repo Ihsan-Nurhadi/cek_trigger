@@ -325,7 +325,10 @@
             <div class="results-header">
                 <span class="results-title">Hasil Rekaman</span>
                 {% if result and result.success and result.data %}
-                <span class="badge-count">{{ result.data|length }} rekaman</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge-count">{{ result.data|length }} segmen</span>
+                    <span style="font-size:11px; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:20px; padding:3px 10px;">⏱ Dipecah per 10 menit</span>
+                </div>
                 {% endif %}
             </div>
 
@@ -336,9 +339,10 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th class="col-num">No</th>
+                                    <th class="col-num">Segmen</th>
                                     <th>Start Time</th>
                                     <th>End Time</th>
+                                    <th>Durasi</th>
                                     <th class="col-dl">Download</th>
                                 </tr>
                             </thead>
@@ -348,14 +352,18 @@
                                     <td class="col-num">{{ forloop.counter }}</td>
                                     <td class="time-cell">{{ row.start_time }}</td>
                                     <td class="time-end">{{ row.end_time }}</td>
+                                    <td class="time-end" style="color: #64748b; font-weight: 600;">{{ row.duration|default:"-" }}</td>
                                     <td class="col-dl">
                                         <form method="POST" action="/download/" target="_blank" style="display:inline">
                                             {% csrf_token %}
-                                            <input type="hidden" name="ip"           value="{{ ip }}">
-                                            <input type="hidden" name="username"     value="{{ username }}">
-                                            <input type="hidden" name="password"     value="{{ password }}">
-                                            <input type="hidden" name="playback_uri" value="{{ row.playback_uri }}">
-                                            <input type="hidden" name="start_time"   value="{{ row.start_time }}">
+                                            <input type="hidden" name="ip"            value="{{ ip }}">
+                                            <input type="hidden" name="username"      value="{{ username }}">
+                                            <input type="hidden" name="password"      value="{{ password }}">
+                                            <input type="hidden" name="playback_uri"  value="{{ row.playback_uri }}">
+                                            <input type="hidden" name="start_time"    value="{{ row.start_time }}">
+                                            <input type="hidden" name="seg_start_utc" value="{{ row.seg_start_utc }}">
+                                            <input type="hidden" name="seg_end_utc"   value="{{ row.seg_end_utc }}">
+                                            <input type="hidden" name="file_start_utc" value="{{ row.file_start_utc }}">
                                             <button type="submit" class="btn-dl">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>

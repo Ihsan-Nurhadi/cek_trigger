@@ -14,9 +14,21 @@ urlpatterns = [
     path('sites/add/', views.sites_add, name='sites_add'),
     path('sites/<int:site_id>/delete/', views.sites_delete, name='sites_delete'),
     path('sites/<int:site_id>/toggle/', views.sites_toggle, name='sites_toggle'),
+    path('sites/<int:site_id>/update/', views.sites_update, name='sites_update'),
 
     # ── Notifications ─────────────────────────────────────────
     path('notifications/', views.notifications_list, name='notifications_list'),
     path('notifications/mark-read/', views.notifications_mark_read, name='notifications_mark_read'),
     path('notifications/sse/', views.notifications_sse, name='notifications_sse'),
+
+    # ── MQTT ──────────────────────────────────────────────────
+    path('api/mqtt/status/', views.mqtt_status, name='mqtt_status'),
+    path('api/mqtt/command/', views.mqtt_command, name='mqtt_command'),
+    path('api/mqtt/siren/', views.mqtt_siren, name='mqtt_siren'),
+    
+    # ── History Snapshots ─────────────────────────────────────
+    path('api/history/snapshots/', views.history_snapshots, name='history_snapshots'),
+    
+    # ── Camera Info ───────────────────────────────────────────
+    path('api/camera/sdcard/', views.camera_sdcard_status, name='camera_sdcard_status'),
 ]
